@@ -1,20 +1,42 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Ionicons } from '@expo/vector-icons';
+import ChatScreen from './screens/ChatScreen';
+import ProfileScreen from './screens/ProfileScreen';
+
+const Tab = createBottomTabNavigator();
 
 export default function App() {
   return (
-    <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <NavigationContainer>
+      <Tab.Navigator
+        screenOptions={({ route }) => ({
+          tabBarIcon: ({ focused, color, size }) => {
+            let iconName;
+
+            if (route.name === 'Chat') {
+              iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
+            } else if (route.name === 'Profil') {
+              iconName = focused ? 'person' : 'person-outline';
+            }
+
+            return <Ionicons name={iconName} size={size} color={color} />;
+          },
+          tabBarActiveTintColor: '#007AFF',
+          tabBarInactiveTintColor: 'gray',
+          headerStyle: {
+            backgroundColor: '#007AFF',
+          },
+          headerTintColor: '#fff',
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+        })}
+      >
+        <Tab.Screen name="Chat" component={ChatScreen} />
+        <Tab.Screen name="Profil" component={ProfileScreen} />
+      </Tab.Navigator>
+    </NavigationContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

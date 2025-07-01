@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "fesh-expo",
-    "slug": "fesh-expo",
+    "name": "Fresh Expo",
+    "slug": "fresh-expo",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -15,16 +15,33 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.freshexpo.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.freshexpo.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "bfa821d0-ba49-4ea6-909e-a0417e05d2f8"
+      }
+    },
+    "owner": "dadina",
+    "updates": {
+      "url": "https://u.expo.dev/bfa821d0-ba49-4ea6-909e-a0417e05d2f8"
     }
   }
 }
