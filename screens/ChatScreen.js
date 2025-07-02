@@ -1,12 +1,29 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { GiftedChat, Bubble, InputToolbar, Send } from 'react-native-gifted-chat';
-import { View, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { View, Platform, ActivityIndicator, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { chatService } from '../utils/chatService';
 
 export default function ChatScreen() {
   const [messages, setMessages] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    const keyboardWillShowListener = Keyboard.addListener('keyboardWillShow', () => {
+      setIsKeyboardOpen(true);
+    });
+    const keyboardWillHideListener = Keyboard.addListener('keyboardWillHide', () => {
+      setIsKeyboardOpen(false);
+    });
+
+    return () => {
+      keyboardWillShowListener?.remove();
+      keyboardWillHideListener?.remove();
+    };
+  }, []);
 
   useEffect(() => {
     // Initialisiere mit Willkommensnachricht
@@ -65,7 +82,7 @@ export default function ChatScreen() {
       const aiResponse = await chatService.getAIResponse(userMessage.text);
       
       const aiMessage = {
-        _id: Math.random().toString(),
+        _id: Date.now() + Math.random(),
         text: aiResponse,
         createdAt: new Date(),
         user: {
@@ -164,7 +181,11 @@ export default function ChatScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff' }}>
+    <View style={{ 
+      flex: 1, 
+      backgroundColor: '#fff', 
+      paddingBottom: isKeyboardOpen ? 0 : insets.bottom 
+    }}>
       <GiftedChat
         messages={messages}
         onSend={messages => onSend(messages)}
@@ -188,7 +209,6 @@ export default function ChatScreen() {
           ) : null
         }
       />
-      {Platform.OS === 'android' && <KeyboardAvoidingView behavior="padding" />}
     </View>
   );
 }
