@@ -9,7 +9,8 @@ import Animated, {
   useAnimatedStyle, 
   withTiming, 
   withSpring,
-  runOnJS 
+  runOnJS,
+  useAnimatedReaction 
 } from 'react-native-reanimated';
 import { GestureHandlerRootView, PanGestureHandler } from 'react-native-gesture-handler';
 import ChatScreen from './screens/ChatScreen';
@@ -30,19 +31,30 @@ function CustomHeader({ title, onMenuPress }) {
 }
 
 const SIDEBAR_WIDTH = 280;
+const SIDEBAR_ACTUAL_WIDTH = 280 * 1.2; // 20% größer
+const SIDEBAR_OFFSET = SIDEBAR_ACTUAL_WIDTH - SIDEBAR_WIDTH; // Überhang nach links
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-function CustomSidebar({ visible, onClose, activeScreen, onNavigate }) {
-  const translateX = useSharedValue(-SIDEBAR_WIDTH);
-  const backdropOpacity = useSharedValue(0);
-
+function CustomSidebar({ visible, onClose, activeScreen, onNavigate, translateX, backdropOpacity }) {
   React.useEffect(() => {
     if (visible) {
-      translateX.value = withSpring(0, { damping: 20, stiffness: 300 });
-      backdropOpacity.value = withTiming(1, { duration: 300 });
+      translateX.value = withSpring(0, { 
+        damping: 50,
+        stiffness: 500,
+        overshootClamping: true,
+        restDisplacementThreshold: 0.01,
+        restSpeedThreshold: 0.01
+      });
+      backdropOpacity.value = withTiming(1, { duration: 200 });
     } else {
-      translateX.value = withSpring(-SIDEBAR_WIDTH, { damping: 20, stiffness: 300 });
-      backdropOpacity.value = withTiming(0, { duration: 300 });
+      translateX.value = withSpring(-SIDEBAR_WIDTH, { 
+        damping: 50,
+        stiffness: 500,
+        overshootClamping: true,
+        restDisplacementThreshold: 0.01,
+        restSpeedThreshold: 0.01
+      });
+      backdropOpacity.value = withTiming(0, { duration: 200 });
     }
   }, [visible]);
 
@@ -56,27 +68,77 @@ function CustomSidebar({ visible, onClose, activeScreen, onNavigate }) {
 
   const gestureHandler = (event) => {
     'worklet';
-    const { translationX, velocityX } = event.nativeEvent;
+    const { translationX, velocityX, state } = event.nativeEvent;
     
-    if (translationX < -50 || velocityX < -500) {
-      translateX.value = withSpring(-SIDEBAR_WIDTH, { damping: 20, stiffness: 300 });
-      backdropOpacity.value = withTiming(0, { duration: 300 });
-      runOnJS(onClose)();
-    } else {
-      translateX.value = withSpring(0, { damping: 20, stiffness: 300 });
-      backdropOpacity.value = withTiming(1, { duration: 300 });
+    // State 4 = ACTIVE - Echtzeit-Tracking beim Schließen
+    if (state === 4) {
+      const newX = Math.min(0, translationX);
+      translateX.value = newX;
+      const progress = 1 + (newX / SIDEBAR_WIDTH);
+      backdropOpacity.value = Math.max(0, progress);
+    }
+    
+    // State 5 = END
+    if (state === 5) {
+      if (translationX < -SIDEBAR_WIDTH / 2 || velocityX < -500) {
+        translateX.value = withSpring(-SIDEBAR_WIDTH, { 
+          damping: 50,
+          stiffness: 500,
+          overshootClamping: true,
+          restDisplacementThreshold: 0.01,
+          restSpeedThreshold: 0.01
+        });
+        backdropOpacity.value = withTiming(0, { duration: 200 });
+        runOnJS(onClose)();
+      } else {
+        translateX.value = withSpring(0, { 
+          damping: 50,
+          stiffness: 500,
+          overshootClamping: true,
+          restDisplacementThreshold: 0.01,
+          restSpeedThreshold: 0.01
+        });
+        backdropOpacity.value = withTiming(1, { duration: 200 });
+      }
     }
   };
 
+  const [modalVisible, setModalVisible] = React.useState(false);
+  
+  // Modal zeigen wenn visible true ist oder wenn translateX sich ändert
+  React.useEffect(() => {
+    if (visible) {
+      setModalVisible(true);
+    }
+  }, [visible]);
+  
+  // Überwache translateX Änderungen
+  useAnimatedReaction(
+    () => translateX.value,
+    (current) => {
+      if (current > -SIDEBAR_WIDTH) {
+        runOnJS(setModalVisible)(true);
+      } else if (current === -SIDEBAR_WIDTH && !visible) {
+        runOnJS(setModalVisible)(false);
+      }
+    }
+  );
+  
   return (
     <Modal
-      visible={visible}
+      visible={modalVisible}
       animationType="none"
       transparent={true}
       onRequestClose={onClose}
     >
       <View style={styles.modalOverlay}>
-        <PanGestureHandler onGestureEvent={gestureHandler}>
+        <Animated.View style={[styles.modalBackground, backdropStyle]}>
+          <TouchableOpacity style={styles.modalBackgroundTouchable} onPress={onClose} />
+        </Animated.View>
+        <PanGestureHandler 
+          onGestureEvent={gestureHandler}
+          onHandlerStateChange={gestureHandler}
+        >
           <Animated.View style={[styles.sidebar, sidebarStyle]}>
             <SafeAreaView style={styles.sidebarContent}>
               <View style={styles.sidebarHeader}>
@@ -106,27 +168,79 @@ function CustomSidebar({ visible, onClose, activeScreen, onNavigate }) {
             </SafeAreaView>
           </Animated.View>
         </PanGestureHandler>
-        <Animated.View style={[styles.modalBackground, backdropStyle]}>
-          <TouchableOpacity style={styles.modalBackgroundTouchable} onPress={onClose} />
-        </Animated.View>
       </View>
     </Modal>
   );
 }
 
-function EdgeSwipeHandler({ onSwipe, children }) {
-  const edgeSwipeHandler = (event) => {
+function EdgeSwipeHandler({ onSwipe, children, menuTranslateX, backdropOpacity }) {
+  const startX = useSharedValue(0);
+  const isTracking = useSharedValue(false);
+  
+  const gestureHandler = (event) => {
     'worklet';
-    const { translationX, velocityX, absoluteX } = event.nativeEvent;
+    const { translationX, velocityX, absoluteX, state } = event.nativeEvent;
     
-    // Nur reagieren wenn Swipe vom linken Rand startet (erste 20px)
-    if (absoluteX < 20 && translationX > 50 && velocityX > 300) {
-      runOnJS(onSwipe)();
+    // State 2 = BEGAN
+    if (state === 2) {
+      startX.value = absoluteX;
+      // Nur vom linken Rand tracken
+      if (absoluteX < 30) {
+        isTracking.value = true;
+      }
+    }
+    
+    // State 4 = ACTIVE
+    if (state === 4 && isTracking.value) {
+      const progress = Math.min(1, Math.max(0, translationX / SIDEBAR_WIDTH));
+      menuTranslateX.value = -SIDEBAR_WIDTH + (translationX);
+      backdropOpacity.value = progress;
+    }
+    
+    // State 5 = END
+    if (state === 5 && isTracking.value) {
+      isTracking.value = false;
+      
+      // Entscheiden ob öffnen oder schließen basierend auf Position und Geschwindigkeit
+      if (translationX > SIDEBAR_WIDTH / 2 || velocityX > 500) {
+        menuTranslateX.value = withSpring(0, { 
+          damping: 50,
+          stiffness: 500,
+          overshootClamping: true
+        });
+        backdropOpacity.value = withTiming(1, { duration: 200 });
+        runOnJS(onSwipe)(true);
+      } else {
+        menuTranslateX.value = withSpring(-SIDEBAR_WIDTH, { 
+          damping: 50,
+          stiffness: 500,
+          overshootClamping: true
+        });
+        backdropOpacity.value = withTiming(0, { duration: 200 });
+        runOnJS(onSwipe)(false);
+      }
+    }
+    
+    // State 3 = CANCELLED / FAILED
+    if ((state === 3 || state === 1) && isTracking.value) {
+      isTracking.value = false;
+      menuTranslateX.value = withSpring(-SIDEBAR_WIDTH, { 
+        damping: 50,
+        stiffness: 500,
+        overshootClamping: true
+      });
+      backdropOpacity.value = withTiming(0, { duration: 200 });
     }
   };
 
   return (
-    <PanGestureHandler onGestureEvent={edgeSwipeHandler}>
+    <PanGestureHandler 
+      onHandlerStateChange={gestureHandler}
+      onGestureEvent={gestureHandler}
+      shouldCancelWhenOutside={false}
+      activeOffsetX={5}
+      failOffsetY={[-30, 30]}
+    >
       <Animated.View style={{ flex: 1 }}>
         {children}
       </Animated.View>
@@ -138,12 +252,20 @@ export default function App() {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [activeScreen, setActiveScreen] = useState('Chat');
   const navigationRef = useRef();
+  
+  // Shared values für Echtzeit-Tracking
+  const menuTranslateX = useSharedValue(-SIDEBAR_WIDTH);
+  const backdropOpacity = useSharedValue(0);
 
   return (
     <KeyboardProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <NavigationContainer ref={navigationRef}>
-          <EdgeSwipeHandler onSwipe={() => setSidebarVisible(true)}>
+          <EdgeSwipeHandler 
+            onSwipe={(shouldOpen) => setSidebarVisible(shouldOpen !== false)}
+            menuTranslateX={menuTranslateX}
+            backdropOpacity={backdropOpacity}
+          >
             <Tab.Navigator
               screenOptions={{
                 tabBarStyle: { display: 'none' },
@@ -178,6 +300,8 @@ export default function App() {
               setSidebarVisible(false);
               navigationRef.current?.navigate(screen);
             }}
+            translateX={menuTranslateX}
+            backdropOpacity={backdropOpacity}
           />
         </NavigationContainer>
       </GestureHandlerRootView>
@@ -212,16 +336,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   modalBackground: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   sidebar: {
-    width: SIDEBAR_WIDTH,
+    width: SIDEBAR_ACTUAL_WIDTH,
     backgroundColor: '#fff',
     position: 'absolute',
-    left: 0,
+    left: -SIDEBAR_OFFSET,
     top: 0,
     bottom: 0,
+    zIndex: 10,
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 0 },
@@ -230,6 +359,7 @@ const styles = StyleSheet.create({
   },
   sidebarContent: {
     flex: 1,
+    marginLeft: SIDEBAR_OFFSET, // Inhalt nur im sichtbaren Bereich
   },
   modalBackgroundTouchable: {
     flex: 1,
