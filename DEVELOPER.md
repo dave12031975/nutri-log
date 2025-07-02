@@ -238,7 +238,48 @@ eas build:view [build-id]
    - Prüfe Supabase Dashboard
    - Teste Netzwerkverbindung
 
-## 🚀 Deployment
+## 🚀 Deployment Workflow
+
+### ⚠️ **WICHTIG: Reihenfolge vor jedem Build/Deployment**
+
+**Immer diese Schritte in genau dieser Reihenfolge befolgen:**
+
+```bash
+# 1. Projekt validieren
+npx expo doctor
+
+# 2. Änderungen committen und pushen
+git add .
+git commit -m "Your commit message"
+git push
+
+# 3. Development Build erstellen
+eas build --platform ios --profile development --clear-cache
+# Warten bis Build fertig ist...
+
+# 4. QR-Code scannen um Build zu installieren
+
+# 5. Expo Dev Server starten
+npx expo start
+
+# 6. QR-Code scannen um zu connecten
+
+# 7. Fertig! 🎉
+```
+
+### Common Issues bei expo doctor
+
+```bash
+# OpenAI Package Warnung ignorieren
+# Bereits in package.json konfiguriert:
+"expo": {
+  "doctor": {
+    "reactNativeDirectoryCheck": {
+      "listUnknownPackages": false
+    }
+  }
+}
+```
 
 ### iOS App Store
 

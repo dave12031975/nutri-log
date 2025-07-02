@@ -91,6 +91,39 @@ fesh-expo/
 - Auth-Service vorbereitet für User-Management
 - Keine sensitiven Daten im Code
 
+## ⚠️ **KRITISCHER WORKFLOW - Vor jedem Build/Deployment**
+
+**IMMER diese Schritte in genau dieser Reihenfolge befolgen:**
+
+```bash
+# 1. Projekt validieren
+npx expo doctor
+
+# 2. Änderungen committen und pushen
+git add .
+git commit -m "Your commit message"
+git push
+
+# 3. Development Build erstellen
+eas build --platform ios --profile development --clear-cache
+# Warten bis Build fertig ist...
+
+# 4. QR-Code scannen um Build zu installieren
+
+# 5. Expo Dev Server starten
+npx expo start
+
+# 6. QR-Code scannen um zu connecten
+
+# 7. Fertig! 🎉
+```
+
+### Häufige Probleme
+
+- **OpenAI Package Warnung**: Bereits in package.json konfiguriert (ignoriert)
+- **Push Notifications**: Erfordert existierende Apple Push Keys (Maximum erreicht)
+- **Expo Doctor**: Immer vor Build ausführen um Dependency-Probleme zu fangen
+
 ## 📞 Support
 
 - EAS Dashboard: https://expo.dev/accounts/dadina/projects/fresh-expo
