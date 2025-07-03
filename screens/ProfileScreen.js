@@ -4,9 +4,181 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 
+// Hilfsfunktionen für User-Informationen
+const getAuthProvider = (user) => {
+  // Strategie 1: Verwende app_metadata.provider als primäre Quelle
+  if (user?.app_metadata?.provider) {
+    console.log('Provider from app_metadata:', user.app_metadata.provider);
+    return user.app_metadata.provider;
+  }
+  
+  // Strategie 2: Fallback - Identity mit neuesten last_sign_in_at
+  if (!user?.identities?.length) {
+    return 'email';
+  }
+  
+  const mostRecentIdentity = user.identities.reduce((latest, current) => {
+    const currentTime = new Date(current.last_sign_in_at);
+    const latestTime = new Date(latest.last_sign_in_at);
+    return currentTime > latestTime ? current : latest;
+  });
+  
+  console.log('Provider from most recent identity:', mostRecentIdentity.provider);
+  return mostRecentIdentity.provider;
+};
+
+const getProviderIcon = (provider) => {
+  switch (provider) {
+    case 'google': return 'logo-google';
+    case 'apple': return 'logo-apple';
+    case 'facebook': return 'logo-facebook';
+    case 'github': return 'logo-github';
+    default: return 'mail-outline';
+  }
+};
+
+const getProviderName = (provider) => {
+  switch (provider) {
+    case 'google': return 'Google';
+    case 'apple': return 'Apple';
+    case 'facebook': return 'Facebook';
+    case 'github': return 'GitHub';
+    case 'email': return 'Email';
+    default: return 'Email';
+  }
+};
+
+const getMostRecentIdentity = (user) => {
+  if (!user?.identities?.length) return null;
+  
+  return user.identities.reduce((latest, current) => {
+    const currentTime = new Date(current.last_sign_in_at);
+    const latestTime = new Date(latest.last_sign_in_at);
+    return currentTime > latestTime ? current : latest;
+  });
+};
+
+const getUserAvatar = (user) => {
+  const mostRecentIdentity = getMostRecentIdentity(user);
+  
+  // Versuche Avatar-URL aus verschiedenen Quellen zu bekommen
+  const avatarUrl = 
+    user?.user_metadata?.avatar_url ||
+    user?.user_metadata?.picture ||
+    mostRecentIdentity?.identity_data?.avatar_url ||
+    mostRecentIdentity?.identity_data?.picture;
+  
+  return avatarUrl;
+};
+
+const getInitials = (user) => {
+  const mostRecentIdentity = getMostRecentIdentity(user);
+  
+  const name = user?.user_metadata?.full_name || 
+               user?.user_metadata?.name || 
+               mostRecentIdentity?.identity_data?.full_name ||
+               user?.email;
+  
+  if (!name) return 'U';
+  
+  return name
+    .split(' ')
+    .map(part => part.charAt(0).toUpperCase())
+    .slice(0, 2)
+    .join('');
+};
+
+// Avatar Komponente
+const UserAvatar = ({ user, size = 100 }) => {
+  const avatarUrl = getUserAvatar(user);
+  const initials = getInitials(user);
+  
+  if (avatarUrl) {
+    return (
+      <Image 
+        source={{ uri: avatarUrl }}
+        style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}
+      />
+    );
+  }
+  
+  // Fallback: Initials in colored circle
+  return (
+    <View style={[
+      styles.avatarFallback, 
+      { 
+        width: size, 
+        height: size, 
+        borderRadius: size / 2,
+        backgroundColor: getAvatarColor(user?.email || '')
+      }
+    ]}>
+      <Text style={[styles.avatarInitials, { fontSize: size * 0.4 }]}>
+        {initials}
+      </Text>
+    </View>
+  );
+};
+
+// Konsistente Farbe basierend auf Email generieren
+const getAvatarColor = (email) => {
+  const colors = [
+    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
+    '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'
+  ];
+  
+  let hash = 0;
+  for (let i = 0; i < email.length; i++) {
+    hash = email.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  return colors[Math.abs(hash) % colors.length];
+};
+
+// Funktion um Provider aus Session zu erkennen
+const getSessionProvider = (session) => {
+  // Dekodiere JWT Token um AMR (Authentication Method Reference) zu erhalten
+  if (session?.access_token) {
+    try {
+      const payload = JSON.parse(atob(session.access_token.split('.')[1]));
+      console.log('JWT payload:', payload);
+      
+      // Prüfe AMR (Authentication Method Reference) 
+      const authMethod = payload.amr?.[0];
+      console.log('Auth method from JWT:', authMethod);
+      
+      // OAuth provider sind in app_metadata.provider gespeichert
+      if (authMethod === 'oauth') {
+        const provider = session?.user?.app_metadata?.provider;
+        console.log('OAuth provider from app_metadata:', provider);
+        return provider || 'email';
+      }
+      
+      // Password = Email Login
+      if (authMethod === 'password') {
+        return 'email';
+      }
+    } catch (error) {
+      console.warn('Error decoding JWT:', error);
+    }
+  }
+  
+  // Fallback zu app_metadata.provider
+  const fallbackProvider = session?.user?.app_metadata?.provider || 'email';
+  console.log('Fallback provider:', fallbackProvider);
+  return fallbackProvider;
+};
+
 export default function ProfileScreen() {
-  const { user, signOut } = useAuth();
+  const { user, session, signOut } = useAuth();
   const navigation = useNavigation();
+  
+  // Verwende Session für Provider-Information
+  const sessionProvider = getSessionProvider(session);
+  console.log('Detected session provider:', sessionProvider);
+  
+  const providerName = getProviderName(sessionProvider);
+  const providerIcon = getProviderIcon(sessionProvider);
   
   const handleSignOut = async () => {
     Alert.alert(
@@ -50,14 +222,17 @@ export default function ProfileScreen() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.profileHeader}>
-        <Image 
-          source={require('../assets/images/user-avatar.png')}
-          style={styles.avatar}
-        />
+        <UserAvatar user={user} size={100} />
         <Text style={styles.userName}>
-          {user.user_metadata?.full_name || 'User'}
+          {user.user_metadata?.full_name || user.user_metadata?.name || user.identities?.[0]?.identity_data?.full_name || 'User'}
         </Text>
         <Text style={styles.userEmail}>{user.email}</Text>
+        
+        {/* Provider Information */}
+        <View style={styles.providerInfo}>
+          <Ionicons name={providerIcon} size={16} color="#666" />
+          <Text style={styles.providerText}>Signed in with {providerName}</Text>
+        </View>
       </View>
 
       <View style={styles.section}>
@@ -67,6 +242,17 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={24} color="#ccc" />
         </TouchableOpacity>
 
+        <TouchableOpacity style={styles.menuItem}>
+          <Ionicons name={providerIcon} size={24} color="#007AFF" />
+          <View style={styles.accountInfo}>
+            <Text style={styles.menuText}>Account</Text>
+            <Text style={styles.accountSubtext}>Connected via {providerName}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={24} color="#ccc" />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.section}>
         <TouchableOpacity style={styles.menuItem}>
           <Ionicons name="notifications-outline" size={24} color="#007AFF" />
           <Text style={styles.menuText}>Notifications</Text>
@@ -125,6 +311,35 @@ const styles = StyleSheet.create({
   userEmail: {
     fontSize: 16,
     color: '#666',
+    marginBottom: 8,
+  },
+  providerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  providerText: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 6,
+  },
+  avatarFallback: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  avatarInitials: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  accountInfo: {
+    flex: 1,
+    marginLeft: 15,
+  },
+  accountSubtext: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 2,
   },
   section: {
     backgroundColor: '#fff',

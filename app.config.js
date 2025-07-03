@@ -18,6 +18,7 @@ export default {
       supportsTablet: true,
       bundleIdentifier: "com.freshexpo.app",
       usesAppleSignIn: true,
+      googleServicesFile: "./GoogleService-Info.plist",
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false
       }
@@ -45,7 +46,8 @@ export default {
     },
     plugins: [
       "expo-web-browser",
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      "@react-native-google-signin/google-signin"
     ],
     scheme: "fresh-expo"
   }

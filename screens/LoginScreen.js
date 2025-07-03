@@ -16,6 +16,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { signInWithProvider } from '../utils/socialAuth';
 import { signInWithApple, isAppleAuthAvailable } from '../utils/appleAuth';
+import { signInWithGoogle, isGoogleAuthAvailable, initGoogle } from '../utils/googleAuth';
 
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
@@ -23,15 +24,23 @@ const LoginScreen = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
+  const [googleAuthAvailable, setGoogleAuthAvailable] = useState(false);
   const { signIn } = useAuth();
 
   React.useEffect(() => {
-    checkAppleAuthAvailability();
+    checkAuthAvailability();
   }, []);
 
-  const checkAppleAuthAvailability = async () => {
-    const available = await isAppleAuthAvailable();
-    setAppleAuthAvailable(available);
+  const checkAuthAvailability = async () => {
+    const appleAvailable = await isAppleAuthAvailable();
+    const googleAvailable = await isGoogleAuthAvailable();
+    setAppleAuthAvailable(appleAvailable);
+    setGoogleAuthAvailable(googleAvailable);
+    
+    // Google konfigurieren
+    if (googleAvailable) {
+      initGoogle();
+    }
   };
 
   const handleLogin = async () => {
@@ -55,6 +64,13 @@ const LoginScreen = ({ navigation }) => {
       if (provider === 'apple') {
         const { user, session } = await signInWithApple();
         console.log('Apple login successful:', { user: user?.email });
+      } else if (provider === 'google') {
+        const result = await signInWithGoogle();
+        if (result.success) {
+          console.log('Google login successful:', { user: result.user?.email });
+        } else {
+          throw new Error(result.error);
+        }
       } else {
         const { user, session } = await signInWithProvider(provider);
         console.log('Social login successful:', { user: user?.email, provider });
@@ -161,14 +177,16 @@ const LoginScreen = ({ navigation }) => {
               </TouchableOpacity>
             )}
 
-            <TouchableOpacity 
-              style={[styles.socialButton, styles.googleButton, loading && styles.socialButtonDisabled]}
-              onPress={() => handleSocialLogin('google')}
-              disabled={loading}
-            >
-              <Ionicons name="logo-google" size={20} color="#EA4335" />
-              <Text style={styles.socialButtonText}>Continue with Google</Text>
-            </TouchableOpacity>
+            {googleAuthAvailable && (
+              <TouchableOpacity 
+                style={[styles.socialButton, styles.googleButton, loading && styles.socialButtonDisabled]}
+                onPress={() => handleSocialLogin('google')}
+                disabled={loading}
+              >
+                <Ionicons name="logo-google" size={20} color="#EA4335" />
+                <Text style={styles.socialButtonText}>Continue with Google</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           <View style={styles.footer}>

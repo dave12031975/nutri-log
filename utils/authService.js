@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { signOutGoogle } from './googleAuth';
 
 export const authService = {
   // Registrierung
@@ -41,6 +42,10 @@ export const authService = {
   // Abmeldung
   async signOut() {
     try {
+      // Google Sign-Out (falls angemeldet)
+      await signOutGoogle();
+      
+      // Supabase Sign-Out
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       return { success: true };

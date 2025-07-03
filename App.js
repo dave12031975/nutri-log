@@ -1,10 +1,10 @@
-import React, { useState, useRef } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import React, { useState, useRef, useEffect } from 'react';
+import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, SafeAreaView, Dimensions, ActivityIndicator } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, SafeAreaView, Dimensions, ActivityIndicator, Image } from 'react-native';
 import Animated, { 
   useSharedValue, 
   useAnimatedStyle, 
@@ -16,23 +16,131 @@ import Animated, {
 import { GestureHandlerRootView, PanGestureHandler } from 'react-native-gesture-handler';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
-function AuthButton({ navigationRef, onClose }) {
+// Avatar-Funktionen für Sidebar (wiederverwenden aus ProfileScreen)
+const getMostRecentIdentity = (user) => {
+  if (!user?.identities?.length) return null;
+  
+  return user.identities.reduce((latest, current) => {
+    const currentTime = new Date(current.last_sign_in_at);
+    const latestTime = new Date(latest.last_sign_in_at);
+    return currentTime > latestTime ? current : latest;
+  });
+};
+
+const getSidebarAvatar = (user) => {
+  const mostRecentIdentity = getMostRecentIdentity(user);
+  
+  const avatarUrl = 
+    user?.user_metadata?.avatar_url ||
+    user?.user_metadata?.picture ||
+    mostRecentIdentity?.identity_data?.avatar_url ||
+    mostRecentIdentity?.identity_data?.picture;
+  
+  return avatarUrl;
+};
+
+const getSidebarInitials = (user) => {
+  const mostRecentIdentity = getMostRecentIdentity(user);
+  
+  const name = user?.user_metadata?.full_name || 
+               user?.user_metadata?.name || 
+               mostRecentIdentity?.identity_data?.full_name ||
+               user?.email;
+  
+  if (!name) return 'U';
+  
+  return name
+    .split(' ')
+    .map(part => part.charAt(0).toUpperCase())
+    .slice(0, 2)
+    .join('');
+};
+
+const getSidebarAvatarColor = (email) => {
+  const colors = [
+    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
+    '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'
+  ];
+  
+  let hash = 0;
+  for (let i = 0; i < (email || '').length; i++) {
+    hash = email.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  return colors[Math.abs(hash) % colors.length];
+};
+
+// Sidebar Avatar Component
+const SidebarAvatar = ({ user, size = 32 }) => {
+  const avatarUrl = getSidebarAvatar(user);
+  const initials = getSidebarInitials(user);
+  
+  if (avatarUrl) {
+    return (
+      <View style={[styles.sidebarAvatar, { width: size, height: size }]}>
+        <Image 
+          source={{ uri: avatarUrl }}
+          style={{ width: size, height: size, borderRadius: size / 2 }}
+        />
+      </View>
+    );
+  }
+  
+  return (
+    <View style={[
+      styles.sidebarAvatarFallback, 
+      { 
+        width: size, 
+        height: size, 
+        borderRadius: size / 2,
+        backgroundColor: getSidebarAvatarColor(user?.email || '')
+      }
+    ]}>
+      <Text style={[styles.sidebarAvatarInitials, { fontSize: size * 0.4 }]}>
+        {initials}
+      </Text>
+    </View>
+  );
+};
+
+function AuthButton({ navigationRef, onClose, onNavigate }) {
   const { user, signOut } = useAuth();
   
   if (user) {
+    const userName = user?.user_metadata?.full_name || 
+                    user?.user_metadata?.name || 
+                    user?.identities?.[0]?.identity_data?.full_name ||
+                    'User';
+                    
     return (
-      <TouchableOpacity
-        style={styles.sidebarItem}
-        onPress={async () => {
-          await signOut();
-          onClose();
-        }}
-      >
-        <Ionicons name="log-out-outline" size={24} color="#666" />
-        <Text style={styles.sidebarText}>
-          Sign Out
-        </Text>
-      </TouchableOpacity>
+      <View style={styles.userSection}>
+        {/* User Info - Klickbar für Profil */}
+        <TouchableOpacity 
+          style={styles.userInfo}
+          onPress={() => onNavigate('Profil')}
+        >
+          <SidebarAvatar user={user} size={40} />
+          <View style={styles.userDetails}>
+            <Text style={styles.userName}>{userName}</Text>
+            <Text style={styles.userEmail}>{user.email}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#ccc" />
+        </TouchableOpacity>
+        
+        {/* Sign Out Button */}
+        <TouchableOpacity
+          style={styles.sidebarItem}
+          onPress={async () => {
+            await signOut();
+            onClose();
+          }}
+        >
+          <Ionicons name="log-out-outline" size={24} color="#666" />
+          <Text style={styles.sidebarText}>
+            Sign Out
+          </Text>
+        </TouchableOpacity>
+      </View>
     );
   }
   
@@ -57,7 +165,6 @@ import LoginScreen from './screens/LoginScreen';
 import SignupScreen from './screens/SignupScreen';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 
-const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
 function CustomHeader({ title, onMenuPress }) {
@@ -198,19 +305,10 @@ function CustomSidebar({ visible, onClose, activeScreen, onNavigate, translateX,
                 </Text>
               </TouchableOpacity>
               
-              <TouchableOpacity
-                style={[styles.sidebarItem, activeScreen === 'Profil' && styles.activeSidebarItem]}
-                onPress={() => onNavigate('Profil')}
-              >
-                <Ionicons name="person" size={24} color={activeScreen === 'Profil' ? '#007AFF' : '#666'} />
-                <Text style={[styles.sidebarText, activeScreen === 'Profil' && styles.activeSidebarText]}>
-                  Profil
-                </Text>
-              </TouchableOpacity>
               
               <View style={{ flex: 1 }} />
               
-              <AuthButton navigationRef={navigationRef} onClose={onClose} />
+              <AuthButton navigationRef={navigationRef} onClose={onClose} onNavigate={onNavigate} />
             </SafeAreaView>
           </Animated.View>
         </PanGestureHandler>
@@ -320,8 +418,9 @@ function RootNavigator({ navigationRef }) {
 }
 
 function MainApp() {
-  const { loading } = useAuth();
+  const { user, loading } = useAuth();
   const navigationRef = useRef();
+  const [navigationReady, setNavigationReady] = useState(false);
   
   if (loading) {
     return (
@@ -332,20 +431,44 @@ function MainApp() {
   }
   
   return (
-    <NavigationContainer ref={navigationRef}>
-      <RootNavigator navigationRef={navigationRef} />
+    <NavigationContainer 
+      ref={navigationRef}
+      onReady={() => {
+        console.log('Navigation container ready');
+        setNavigationReady(true);
+      }}
+    >
+      {user ? (
+        <MainTabNavigator navigationRef={navigationRef} navigationReady={navigationReady} />
+      ) : (
+        <AuthStack />
+      )}
     </NavigationContainer>
   );
 }
 
-function MainTabNavigator({ navigationRef }) {
+// Screen Wrapper für bedingte Anzeige
+function ConditionalScreen({ activeScreen, targetScreen, children }) {
+  if (activeScreen === targetScreen) {
+    return children;
+  }
+  return null;
+}
+
+function MainTabNavigator({ navigationRef, navigationReady }) {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [activeScreen, setActiveScreen] = useState('Chat');
-  const tabNavigationRef = useRef();
   
   // Shared values für Echtzeit-Tracking
   const menuTranslateX = useSharedValue(-SIDEBAR_WIDTH);
   const backdropOpacity = useSharedValue(0);
+
+  // Einfacher Navigation Handler
+  const handleNavigate = (screen) => {
+    console.log('Navigating to:', screen, 'from:', activeScreen);
+    setSidebarVisible(false);
+    setActiveScreen(screen);
+  };
 
   return (
       <GestureHandlerRootView style={{ flex: 1 }}>
@@ -354,41 +477,29 @@ function MainTabNavigator({ navigationRef }) {
             menuTranslateX={menuTranslateX}
             backdropOpacity={backdropOpacity}
           >
-            <Tab.Navigator
-              ref={tabNavigationRef}
-              screenOptions={{
-                tabBarStyle: { display: 'none' },
-                header: ({ route }) => (
-                  <CustomHeader 
-                    title={route.name}
-                    onMenuPress={() => setSidebarVisible(true)}
-                  />
-                )
-              }}
-              screenListeners={{
-                state: (e) => {
-                  const state = e.data.state;
-                  if (state) {
-                    const routeName = state.routes[state.index].name;
-                    setActiveScreen(routeName);
-                  }
-                }
-              }}
-            >
-              <Tab.Screen name="Chat" component={ChatScreen} />
-              <Tab.Screen name="Profil" component={ProfileScreen} />
-            </Tab.Navigator>
+            <View style={{ flex: 1 }}>
+              {/* Custom Header */}
+              <CustomHeader 
+                title={activeScreen}
+                onMenuPress={() => setSidebarVisible(true)}
+              />
+              
+              {/* Conditional Screen Rendering */}
+              <ConditionalScreen activeScreen={activeScreen} targetScreen="Chat">
+                <ChatScreen />
+              </ConditionalScreen>
+              
+              <ConditionalScreen activeScreen={activeScreen} targetScreen="Profil">
+                <ProfileScreen />
+              </ConditionalScreen>
+            </View>
           </EdgeSwipeHandler>
           
           <CustomSidebar 
             visible={sidebarVisible}
             onClose={() => setSidebarVisible(false)}
             activeScreen={activeScreen}
-            onNavigate={(screen) => {
-              setActiveScreen(screen);
-              setSidebarVisible(false);
-              tabNavigationRef.current?.navigate(screen);
-            }}
+            onNavigate={handleNavigate}
             translateX={menuTranslateX}
             backdropOpacity={backdropOpacity}
             navigationRef={navigationRef}
@@ -399,11 +510,13 @@ function MainTabNavigator({ navigationRef }) {
 
 export default function App() {
   return (
-    <KeyboardProvider>
-      <AuthProvider>
-        <MainApp />
-      </AuthProvider>
-    </KeyboardProvider>
+    <SafeAreaProvider>
+      <KeyboardProvider>
+        <AuthProvider>
+          <MainApp />
+        </AuthProvider>
+      </KeyboardProvider>
+    </SafeAreaProvider>
   );
 }
 
@@ -496,5 +609,61 @@ const styles = StyleSheet.create({
   activeSidebarText: {
     color: '#007AFF',
     fontWeight: '600',
+  },
+  disabledSidebarItem: {
+    opacity: 0.5,
+  },
+  disabledSidebarText: {
+    color: '#ccc',
+  },
+  userSection: {
+    paddingVertical: 10,
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    marginBottom: 10,
+  },
+  userDetails: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  userEmail: {
+    fontSize: 14,
+    color: '#666',
+  },
+  sidebarAvatar: {
+    borderWidth: 2,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  sidebarAvatarFallback: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  sidebarAvatarInitials: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
 });

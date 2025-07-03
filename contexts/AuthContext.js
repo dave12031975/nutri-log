@@ -54,9 +54,10 @@ export const AuthProvider = ({ children }) => {
 
   const signIn = async (email, password) => {
     try {
-      const { user, session, error } = await authService.signIn(email, password);
-      if (error) throw error;
+      const result = await authService.signIn(email, password);
+      if (!result.success) throw new Error(result.error);
       
+      const { user, session } = result.data;
       setUser(user);
       setSession(session);
       return { user, session };
@@ -86,8 +87,8 @@ export const AuthProvider = ({ children }) => {
 
   const signOut = async () => {
     try {
-      const { error } = await authService.signOut();
-      if (error) throw error;
+      const result = await authService.signOut();
+      if (!result.success) throw new Error(result.error);
       
       setUser(null);
       setSession(null);
@@ -99,8 +100,8 @@ export const AuthProvider = ({ children }) => {
 
   const resetPassword = async (email) => {
     try {
-      const { error } = await authService.resetPassword(email);
-      if (error) throw error;
+      const result = await authService.resetPassword(email);
+      if (!result.success) throw new Error(result.error);
       
       Alert.alert('Success', 'Password reset email sent! Please check your inbox.');
     } catch (error) {
@@ -111,9 +112,10 @@ export const AuthProvider = ({ children }) => {
 
   const updateProfile = async (updates) => {
     try {
-      const { user: updatedUser, error } = await authService.updateProfile(updates);
-      if (error) throw error;
+      const result = await authService.updateProfile(updates);
+      if (!result.success) throw new Error(result.error);
       
+      const { user: updatedUser } = result.data;
       setUser(updatedUser);
       Alert.alert('Success', 'Profile updated successfully!');
       return updatedUser;
