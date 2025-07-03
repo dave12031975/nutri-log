@@ -32,9 +32,7 @@ export default {
     web: {
       favicon: "./assets/favicon.png"
     },
-    runtimeVersion: {
-      policy: "sdkVersion"
-    },
+    runtimeVersion: "1.0.0",
     sdkVersion: "53.0.0",
     extra: {
       eas: {
@@ -46,7 +44,8 @@ export default {
       url: "https://u.expo.dev/bfa821d0-ba49-4ea6-909e-a0417e05d2f8"
     },
     plugins: [
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-apple-authentication"
     ],
     scheme: "fresh-expo"
   }

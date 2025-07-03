@@ -104,26 +104,170 @@ export default {
 };
 ```
 
-#### Schritt 3: Apple Developer Console
+#### Schritt 3: Apple Developer Console - App ID
 
 1. **Öffne Apple Developer Console**
 2. **Gehe zu Certificates, Identifiers & Profiles > Identifiers**
 3. **Wähle deine App ID**: `com.freshexpo.app`
 4. **Aktiviere "Sign In with Apple"**
 5. **Wähle "Enable as a primary App ID"**
+6. **Klicke "Save"** - Apple wird sagen "Update your provisioning profiles"
 
-#### Schritt 4: Supabase Apple Provider Setup
+#### Schritt 4: Apple Key erstellen
+
+1. **Gehe zu Certificates, Identifiers & Profiles > Keys**
+2. **Klicke "+" (Create a Key)**
+3. **Key Name**: "Fresh Expo Auth Key"
+4. **Aktiviere "Sign In with Apple"**
+5. **Klicke "Configure"** → Wähle deine App ID
+6. **Klicke "Save"** → **"Continue"** → **"Register"**
+7. **WICHTIG**: Lade die `.p8` Datei herunter (nur einmal möglich!)
+8. **Merke dir die Key ID** (10 Zeichen, z.B. `ABC123DEFG`)
+
+
+#### Schritt 5: Team ID finden
+
+1. **Gehe zu Membership** (oben rechts)
+2. **Deine Team ID** steht unter "Team ID" (10 Zeichen)
+
+
+#### Schritt 6: Provisioning Profile erstellen/aktualisieren
+
+**Option A: Neues Profile erstellen (empfohlen)**
+1. **Gehe zu Certificates, Identifiers & Profiles > Profiles**
+2. **Klicke "+" (Create Profile)**
+3. **Wähle "iOS App Development"** → **"Continue"**
+4. **App ID**: Wähle `com.freshexpo.app` → **"Continue"**
+5. **Certificates**: Wähle dein Development Certificate → **"Continue"**
+6. **Devices**: Wähle deine Test-Geräte → **"Continue"**
+7. **Profile Name**: "Fresh Expo Development" → **"Generate"**
+8. **Download** und installiere das Profil (doppelklick auf .mobileprovision)
+
+**Option B: Vorhandenes Profile für Fresh Expo suchen**
+1. **Durchsuche deine Profiles** nach einem mit `com.freshexpo.app`
+2. **Falls vorhanden**: Klicke "Edit" → "Generate" → "Download"
+3. **Falls nicht vorhanden**: Nutze Option A
+
+#### Schritt 7: JWT aus Private Key erstellen
+
+**Problem**: Supabase erwartet ein JWT, nicht den Raw Private Key.
+
+**Lösung A: Mit Node.js Script (empfohlen)**
+
+1. **Erstelle eine Datei `generate-jwt.js`**:
+   ```javascript
+   const jwt = require('jsonwebtoken');
+   const fs = require('fs');
+   
+   const privateKey = fs.readFileSync('AuthKey_DEINE_KEY_ID.p8', 'utf8');
+   
+   const token = jwt.sign(
+     {
+       iss: 'DEINE_TEAM_ID',
+       iat: Math.floor(Date.now() / 1000),
+       exp: Math.floor(Date.now() / 1000) + (86400 * 180), // 6 Monate
+       aud: 'https://appleid.apple.com',
+       sub: 'com.freshexpo.app'
+     },
+     privateKey,
+     {
+       algorithm: 'ES256',
+       keyid: 'DEINE_KEY_ID'
+     }
+   );
+   
+   console.log('JWT Token:', token);
+   ```
+
+2. **Installiere jsonwebtoken**:
+   ```bash
+   npm install jsonwebtoken
+   ```
+
+3. **Führe das Script aus**:
+   ```bash
+   node generate-jwt.js
+   ```
+
+**Lösung B: Mit jwt.io (falls A nicht funktioniert)**
+
+1. **Gehe zu https://jwt.io**
+2. **Algorithm**: `ES256` wählen
+3. **Header**:
+   ```json
+   {
+     "alg": "ES256",
+     "kid": "DEINE_KEY_ID"
+   }
+   ```
+4. **Payload**:
+   ```json
+   {
+     "iss": "DEINE_TEAM_ID",
+     "iat": 1640995200,
+     "exp": 1956355200,
+     "aud": "https://appleid.apple.com",
+     "sub": "com.freshexpo.app"
+   }
+   ```
+5. **Private Key**: 
+   - **WICHTIG**: Kompletter Inhalt der .p8 Datei MIT den Zeilen:
+   ```
+   -----BEGIN PRIVATE KEY-----
+   [Dein Key Content]
+   -----END PRIVATE KEY-----
+   ```
+   - **Keine Leerzeichen** am Anfang/Ende
+   - **Alle Zeilen** müssen enthalten sein
+
+6. **Das generierte JWT kopieren** (blauer Text links)
+
+#### Schritt 8: Supabase Apple Provider Setup
 
 1. **Supabase Dashboard** → Authentication → Providers
 2. **Apple aktivieren**:
    ```
    Services ID: com.freshexpo.app
-   Team ID: [Dein Apple Team ID]
-   Key ID: [Dein Apple Key ID]
-   Secret Key: [Private Key von Apple]
+   Team ID: [Deine 10-stellige Team ID]
+   Key ID: [Deine 10-stellige Key ID]  
+   Secret Key: [Das generierte JWT]
+   ```
+3. **Callback URL kopieren**: 
+   ```
+   https://kvvtfuwtmnnxasiwpqny.supabase.co/auth/v1/callback
    ```
 
-#### Schritt 5: Code-Implementation
+#### Schritt 9: Services ID für Authentication erstellen
+
+**STOP!** Das ist Email Communication, nicht Authentication. Du brauchst eine richtige Services ID.
+
+**So gehts richtig:**
+
+1. **Gehe zurück zur Hauptseite** (klicke "View all services")
+2. **Gehe zu "Identifiers"** in der linken Sidebar
+3. **Klicke "+"** → **"Services IDs"** wählen
+4. **Services ID erstellen**:
+   - **Description**: "Fresh Expo Sign In"
+   - **Identifier**: `com.freshexpo.app.signin` (NICHT gleich wie App ID!)
+   - **"Continue" → "Register"**
+5. **Services ID bearbeiten**:
+   - **Klicke auf die neue Services ID**
+   - **"Sign In with Apple" aktivieren** (Checkbox)
+   - **"Configure" klicken**
+6. **Domains und URLs konfigurieren**:
+   - **Primary App ID**: `com.freshexpo.app` wählen
+   - **Domains and Subdomains**: `kvvtfuwtmnnxasiwpqny.supabase.co`
+   - **Return URLs**: `https://kvvtfuwtmnnxasiwpqny.supabase.co/auth/v1/callback`
+7. **"Save" → "Continue" → "Save"**
+
+**DANN**: In Supabase die Services ID ändern zu `com.freshexpo.app.signin`
+
+**Beispiel JWT**: 
+```
+eyJhbGciOiJFUzI1NiIsImtpZCI6IkFCQzEyM0RFRkcifQ.eyJpc3MiOiJERUYxMjM0NTY3IiwiaWF0IjoxNjQwOTk1MjAwLCJleHAiOjE5NTYzNTUyMDAsImF1ZCI6Imh0dHBzOi8vYXBwbGVpZC5hcHBsZS5jb20iLCJzdWIiOiJjb20uZnJlc2hleHBvLmFwcCJ9.signature
+```
+
+#### Schritt 10: Code-Implementation
 
 **utils/appleAuth.js** erstellen:
 ```javascript
@@ -155,7 +299,7 @@ export const signInWithApple = async () => {
 };
 ```
 
-#### Schritt 6: UI Integration
+#### Schritt 11: UI Integration
 
 **SignupScreen.js** aktualisieren:
 ```javascript
@@ -174,7 +318,7 @@ const handleSocialSignup = async (provider) => {
 };
 ```
 
-#### Schritt 7: Development Build erstellen
+#### Schritt 12: Development Build erstellen
 
 ```bash
 # Prebuild für native Code

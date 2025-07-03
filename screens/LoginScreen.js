@@ -15,13 +15,24 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { signInWithProvider } from '../utils/socialAuth';
+import { signInWithApple, isAppleAuthAvailable } from '../utils/appleAuth';
 
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
   const { signIn } = useAuth();
+
+  React.useEffect(() => {
+    checkAppleAuthAvailability();
+  }, []);
+
+  const checkAppleAuthAvailability = async () => {
+    const available = await isAppleAuthAvailable();
+    setAppleAuthAvailable(available);
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -41,10 +52,16 @@ const LoginScreen = ({ navigation }) => {
   const handleSocialLogin = async (provider) => {
     setLoading(true);
     try {
-      const { user, session } = await signInWithProvider(provider);
-      console.log('Social login successful:', { user: user?.email, provider });
+      if (provider === 'apple') {
+        const { user, session } = await signInWithApple();
+        console.log('Apple login successful:', { user: user?.email });
+      } else {
+        const { user, session } = await signInWithProvider(provider);
+        console.log('Social login successful:', { user: user?.email, provider });
+      }
     } catch (error) {
       console.error(`${provider} login error:`, error);
+      alert(error.message || `${provider} Sign-In failed`);
     } finally {
       setLoading(false);
     }
@@ -133,14 +150,16 @@ const LoginScreen = ({ navigation }) => {
               <View style={styles.dividerLine} />
             </View>
 
-            <TouchableOpacity 
-              style={[styles.socialButton, loading && styles.socialButtonDisabled]}
-              onPress={() => handleSocialLogin('apple')}
-              disabled={loading}
-            >
-              <Ionicons name="logo-apple" size={20} color="#000" />
-              <Text style={styles.socialButtonText}>Continue with Apple</Text>
-            </TouchableOpacity>
+            {appleAuthAvailable && (
+              <TouchableOpacity 
+                style={[styles.socialButton, loading && styles.socialButtonDisabled]}
+                onPress={() => handleSocialLogin('apple')}
+                disabled={loading}
+              >
+                <Ionicons name="logo-apple" size={20} color="#000" />
+                <Text style={styles.socialButtonText}>Continue with Apple</Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity 
               style={[styles.socialButton, styles.googleButton, loading && styles.socialButtonDisabled]}
