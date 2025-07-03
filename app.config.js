@@ -17,7 +17,10 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.freshexpo.app",
-      usesAppleSignIn: true
+      usesAppleSignIn: true,
+      infoPlist: {
+        ITSAppUsesNonExemptEncryption: false
+      }
     },
     android: {
       adaptiveIcon: {
@@ -29,10 +32,18 @@ export default {
     web: {
       favicon: "./assets/favicon.png"
     },
+    runtimeVersion: {
+      policy: "sdkVersion"
+    },
+    sdkVersion: "53.0.0",
     extra: {
       eas: {
         projectId: "bfa821d0-ba49-4ea6-909e-a0417e05d2f8"
       }
+    },
+    owner: "dadina",
+    updates: {
+      url: "https://u.expo.dev/bfa821d0-ba49-4ea6-909e-a0417e05d2f8"
     },
     plugins: [
       "expo-web-browser"
