@@ -29,7 +29,7 @@ export default function ChatScreen() {
     // Initialisiere mit Willkommensnachricht
     setMessages([
       {
-        _id: 1,
+        _id: 'welcome_' + Date.now(),
         text: 'Hallo! Wie kann ich Ihnen heute helfen?',
         createdAt: new Date(),
         user: {
@@ -82,7 +82,7 @@ export default function ChatScreen() {
       const aiResponse = await chatService.getAIResponse(userMessage.text);
       
       const aiMessage = {
-        _id: Date.now() + Math.random(),
+        _id: `ai_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         text: aiResponse,
         createdAt: new Date(),
         user: {

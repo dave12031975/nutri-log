@@ -1,9 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, SafeAreaView, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, SafeAreaView, Dimensions, ActivityIndicator } from 'react-native';
 import Animated, { 
   useSharedValue, 
   useAnimatedStyle, 
@@ -13,10 +14,51 @@ import Animated, {
   useAnimatedReaction 
 } from 'react-native-reanimated';
 import { GestureHandlerRootView, PanGestureHandler } from 'react-native-gesture-handler';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+
+function AuthButton({ navigationRef, onClose }) {
+  const { user, signOut } = useAuth();
+  
+  if (user) {
+    return (
+      <TouchableOpacity
+        style={styles.sidebarItem}
+        onPress={async () => {
+          await signOut();
+          onClose();
+        }}
+      >
+        <Ionicons name="log-out-outline" size={24} color="#666" />
+        <Text style={styles.sidebarText}>
+          Sign Out
+        </Text>
+      </TouchableOpacity>
+    );
+  }
+  
+  return (
+    <TouchableOpacity
+      style={styles.sidebarItem}
+      onPress={() => {
+        navigationRef.current?.navigate('Auth');
+        onClose();
+      }}
+    >
+      <Ionicons name="log-in-outline" size={24} color="#666" />
+      <Text style={styles.sidebarText}>
+        Sign In
+      </Text>
+    </TouchableOpacity>
+  );
+}
 import ChatScreen from './screens/ChatScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import LoginScreen from './screens/LoginScreen';
+import SignupScreen from './screens/SignupScreen';
+import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 
 const Tab = createBottomTabNavigator();
+const Stack = createStackNavigator();
 
 function CustomHeader({ title, onMenuPress }) {
   return (
@@ -35,7 +77,7 @@ const SIDEBAR_ACTUAL_WIDTH = 280 * 1.2; // 20% größer
 const SIDEBAR_OFFSET = SIDEBAR_ACTUAL_WIDTH - SIDEBAR_WIDTH; // Überhang nach links
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-function CustomSidebar({ visible, onClose, activeScreen, onNavigate, translateX, backdropOpacity }) {
+function CustomSidebar({ visible, onClose, activeScreen, onNavigate, translateX, backdropOpacity, navigationRef }) {
   React.useEffect(() => {
     if (visible) {
       translateX.value = withSpring(0, { 
@@ -165,6 +207,10 @@ function CustomSidebar({ visible, onClose, activeScreen, onNavigate, translateX,
                   Profil
                 </Text>
               </TouchableOpacity>
+              
+              <View style={{ flex: 1 }} />
+              
+              <AuthButton navigationRef={navigationRef} onClose={onClose} />
             </SafeAreaView>
           </Animated.View>
         </PanGestureHandler>
@@ -248,25 +294,68 @@ function EdgeSwipeHandler({ onSwipe, children, menuTranslateX, backdropOpacity }
   );
 }
 
-export default function App() {
+function AuthStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen name="Signup" component={SignupScreen} />
+      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+    </Stack.Navigator>
+  );
+}
+
+function RootNavigator({ navigationRef }) {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Main">
+        {(props) => <MainTabNavigator {...props} navigationRef={navigationRef} />}
+      </Stack.Screen>
+      <Stack.Screen 
+        name="Auth" 
+        component={AuthStack}
+        options={{ presentation: 'modal' }}
+      />
+    </Stack.Navigator>
+  );
+}
+
+function MainApp() {
+  const { loading } = useAuth();
+  const navigationRef = useRef();
+  
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
+    );
+  }
+  
+  return (
+    <NavigationContainer ref={navigationRef}>
+      <RootNavigator navigationRef={navigationRef} />
+    </NavigationContainer>
+  );
+}
+
+function MainTabNavigator({ navigationRef }) {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [activeScreen, setActiveScreen] = useState('Chat');
-  const navigationRef = useRef();
+  const tabNavigationRef = useRef();
   
   // Shared values für Echtzeit-Tracking
   const menuTranslateX = useSharedValue(-SIDEBAR_WIDTH);
   const backdropOpacity = useSharedValue(0);
 
   return (
-    <KeyboardProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <NavigationContainer ref={navigationRef}>
           <EdgeSwipeHandler 
             onSwipe={(shouldOpen) => setSidebarVisible(shouldOpen !== false)}
             menuTranslateX={menuTranslateX}
             backdropOpacity={backdropOpacity}
           >
             <Tab.Navigator
+              ref={tabNavigationRef}
               screenOptions={{
                 tabBarStyle: { display: 'none' },
                 header: ({ route }) => (
@@ -298,13 +387,22 @@ export default function App() {
             onNavigate={(screen) => {
               setActiveScreen(screen);
               setSidebarVisible(false);
-              navigationRef.current?.navigate(screen);
+              tabNavigationRef.current?.navigate(screen);
             }}
             translateX={menuTranslateX}
             backdropOpacity={backdropOpacity}
+            navigationRef={navigationRef}
           />
-        </NavigationContainer>
       </GestureHandlerRootView>
+  );
+}
+
+export default function App() {
+  return (
+    <KeyboardProvider>
+      <AuthProvider>
+        <MainApp />
+      </AuthProvider>
     </KeyboardProvider>
   );
 }

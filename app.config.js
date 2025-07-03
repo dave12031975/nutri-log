@@ -1,0 +1,42 @@
+export default {
+  expo: {
+    name: "Fresh Expo",
+    slug: "fresh-expo",
+    version: "1.0.0",
+    orientation: "portrait",
+    icon: "./assets/icon.png",
+    userInterfaceStyle: "light",
+    splash: {
+      image: "./assets/splash.png",
+      resizeMode: "contain",
+      backgroundColor: "#ffffff"
+    },
+    assetBundlePatterns: [
+      "**/*"
+    ],
+    ios: {
+      supportsTablet: true,
+      bundleIdentifier: "com.freshexpo.app",
+      usesAppleSignIn: true
+    },
+    android: {
+      adaptiveIcon: {
+        foregroundImage: "./assets/adaptive-icon.png",
+        backgroundColor: "#ffffff"
+      },
+      package: "com.freshexpo.app"
+    },
+    web: {
+      favicon: "./assets/favicon.png"
+    },
+    extra: {
+      eas: {
+        projectId: "bfa821d0-ba49-4ea6-909e-a0417e05d2f8"
+      }
+    },
+    plugins: [
+      "expo-web-browser"
+    ],
+    scheme: "fresh-expo"
+  }
+};
