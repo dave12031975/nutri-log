@@ -20,7 +20,14 @@ export default {
       usesAppleSignIn: true,
       googleServicesFile: "./GoogleService-Info.plist",
       infoPlist: {
-        ITSAppUsesNonExemptEncryption: false
+        ITSAppUsesNonExemptEncryption: false,
+        CFBundleURLTypes: [
+          {
+            CFBundleURLSchemes: [
+              "com.googleusercontent.apps.19781117641-ds4qspmrbtovet444882f89h6jshf1ie"
+            ]
+          }
+        ]
       }
     },
     android: {

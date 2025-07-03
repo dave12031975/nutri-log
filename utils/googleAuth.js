@@ -1,5 +1,6 @@
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { supabase } from './supabase';
+import { Platform } from 'react-native';
 
 // Google Sign-In konfigurieren
 export const initGoogle = () => {
@@ -14,9 +15,12 @@ export const initGoogle = () => {
 // Überprüfe ob Google Play Services verfügbar sind
 export const checkGooglePlayServices = async () => {
   try {
-    await GoogleSignin.hasPlayServices({
-      showPlayServicesUpdateDialog: true,
-    });
+    // Nur auf Android prüfen
+    if (Platform.OS === 'android') {
+      await GoogleSignin.hasPlayServices({
+        showPlayServicesUpdateDialog: true,
+      });
+    }
     return true;
   } catch (error) {
     console.error('Google Play Services not available:', error);
@@ -80,15 +84,19 @@ export const signInWithGoogle = async () => {
 // Google Sign-Out
 export const signOutGoogle = async () => {
   try {
-    const isSignedIn = await GoogleSignin.isSignedIn();
-    if (isSignedIn) {
-      await GoogleSignin.signOut();
-      console.log('Google sign-out successful');
+    // Prüfe ob GoogleSignin verfügbar ist
+    if (GoogleSignin && GoogleSignin.isSignedIn) {
+      const isSignedIn = await GoogleSignin.isSignedIn();
+      if (isSignedIn) {
+        await GoogleSignin.signOut();
+        console.log('Google sign-out successful');
+      }
     }
     return { success: true };
   } catch (error) {
     console.error('Google sign-out error:', error);
-    return { success: false, error: error.message };
+    // Ignoriere Fehler wenn Google Sign-In nicht initialisiert ist
+    return { success: true };
   }
 };
 
@@ -110,6 +118,10 @@ export const getCurrentGoogleUser = async () => {
 // Google verfügbar prüfen
 export const isGoogleAuthAvailable = async () => {
   try {
+    // Auf iOS immer verfügbar, auf Android Play Services prüfen
+    if (Platform.OS === 'ios') {
+      return true;
+    }
     const hasPlayServices = await checkGooglePlayServices();
     return hasPlayServices;
   } catch (error) {
