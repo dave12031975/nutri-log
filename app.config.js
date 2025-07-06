@@ -44,13 +44,10 @@ export default {
     sdkVersion: "53.0.0",
     extra: {
       eas: {
-        projectId: "bfa821d0-ba49-4ea6-909e-a0417e05d2f8"
+        projectId: "nutri-log-temp-id"
       }
     },
     owner: "dadina",
-    updates: {
-      url: "https://u.expo.dev/bfa821d0-ba49-4ea6-909e-a0417e05d2f8"
-    },
     plugins: [
       "expo-web-browser",
       "expo-apple-authentication",
